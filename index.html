@@ -38,29 +38,6 @@
             width: 100%;
             height: 100%;
             background: black;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        /* Hide YouTube elements */
-        #youtubePlayer iframe {
-            pointer-events: none;
-            width: 100%;
-            height: 100%;
-            border: 0;
-        }
-        
-        /* Additional overlay to block any YouTube UI */
-        #youtubePlayer::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: transparent;
-            pointer-events: none;
-            z-index: 10;
         }
         
         #overlay {
@@ -657,7 +634,7 @@
             }
         };
         
-        // Initialize YouTube player with minimal UI
+        // Initialize YouTube player
         function initYouTubePlayer(videoId, isLive = false) {
             if (!isYouTubeReady) {
                 pendingYouTubeId = videoId;
@@ -683,18 +660,12 @@
                 'playsinline': 1,
                 'rel': 0,
                 'showinfo': 0,
-                'mute': 0,
-                'cc_load_policy': 0,
-                'color': 'white',
-                'hl': 'en',
-                'enablejsapi': 1,
-                'origin': window.location.origin
+                'mute': 0
             };
             
             // For live streams, don't enable loop
             if (!isLive) {
                 playerVars.loop = 1;
-                playerVars.playlist = videoId; // Required for loop to work
             }
             
             ytPlayer = new YT.Player('youtubePlayer', {
@@ -729,14 +700,15 @@
                 loopIndicator.classList.remove('hidden');
             }
             
-            // Hide all YouTube UI elements by covering them
-            const iframe = youtubePlayer.querySelector('iframe');
-            if (iframe) {
-                iframe.style.pointerEvents = 'none';
-            }
-            
             // Force fullscreen
-            enterFullscreen();
+            const container = document.getElementById('container');
+            if (container.requestFullscreen) {
+                container.requestFullscreen();
+            } else if (container.webkitRequestFullscreen) {
+                container.webkitRequestFullscreen();
+            } else if (container.msRequestFullscreen) {
+                container.msRequestFullscreen();
+            }
             
             // Update indicators
             sourceText.textContent = isLive ? 'YouTube Live' : 'YouTube';
@@ -763,15 +735,6 @@
             // For live streams, ensure it keeps playing
             if (isLiveStream && event.data === YT.PlayerState.PAUSED) {
                 event.target.playVideo();
-            }
-            
-            // If video is buffering, make sure it resumes
-            if (event.data === YT.PlayerState.BUFFERING) {
-                setTimeout(() => {
-                    if (ytPlayer && ytPlayer.getPlayerState() === YT.PlayerState.BUFFERING) {
-                        ytPlayer.playVideo();
-                    }
-                }, 1000);
             }
         }
         
@@ -828,11 +791,6 @@
                     ytPlayer.playVideo();
                 }
                 
-                // If unstarted, try to play
-                if (state === -1) {
-                    ytPlayer.playVideo();
-                }
-                
             }, 5000); // Check every 5 seconds
         }
         
@@ -881,17 +839,17 @@
             
             const channel = match[1];
             
-            // Use Twitch embed with minimal UI
+            // Use Twitch embed
             youtubePlayer.style.display = 'block';
             videoPlayer.style.display = 'none';
             
             youtubePlayer.innerHTML = `
-                <iframe src="https://player.twitch.tv/?channel=${channel}&parent=${window.location.hostname}&controls=false&autoplay=true&muted=false" 
+                <iframe src="https://player.twitch.tv/?channel=${channel}&parent=${window.location.hostname}" 
                         frameborder="0" 
                         allowfullscreen="false" 
                         scrolling="no"
                         allow="autoplay; fullscreen"
-                        style="width:100%; height:100%; pointer-events:none;">
+                        style="width:100%; height:100%;">
                 </iframe>
             `;
             
