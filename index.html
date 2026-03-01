@@ -9,7 +9,6 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            user-select: none;
         }
         
         body {
@@ -39,27 +38,29 @@
             width: 100%;
             height: 100%;
             background: black;
+            position: relative;
+            overflow: hidden;
         }
         
-        /* Hide YouTube title and controls */
+        /* Hide YouTube elements */
         #youtubePlayer iframe {
             pointer-events: none;
             width: 100%;
             height: 100%;
-            border: none;
+            border: 0;
         }
         
-        /* Hide any potential overlays */
-        .ytp-title, .ytp-title-text, .ytp-title-link, .ytp-title-channel, 
-        .ytp-chrome-top, .ytp-gradient-top, .ytp-ce-element, .ytp-pause-overlay,
-        .ytp-endscreen-content, .ytp-share-panel, .ytp-overflow-panel,
-        .ytp-spinner, .ytp-watermark, .ytp-youtube-button {
-            display: none !important;
-        }
-        
-        /* Ensure video fills container without distractions */
-        #youtubePlayer {
-            overflow: hidden;
+        /* Additional overlay to block any YouTube UI */
+        #youtubePlayer::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: transparent;
+            pointer-events: none;
+            z-index: 10;
         }
         
         #overlay {
@@ -303,10 +304,6 @@
             box-shadow: 0 8px 25px rgba(255, 0, 0, 0.5);
         }
         
-        .youtube-button:active {
-            transform: scale(0.95);
-        }
-        
         .examples {
             margin-top: 30px;
             padding: 20px;
@@ -485,21 +482,6 @@
             color: #ff8888;
             font-size: 12px;
         }
-        
-        .control-hint {
-            position: fixed;
-            bottom: 10px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: rgba(255, 255, 255, 0.3);
-            font-size: 11px;
-            z-index: 100;
-            pointer-events: none;
-            background: rgba(0,0,0,0.5);
-            padding: 5px 15px;
-            border-radius: 50px;
-            white-space: nowrap;
-        }
     </style>
 </head>
 <body>
@@ -591,7 +573,7 @@
             
             <p style="margin-top: 30px; font-size: 12px; color: #666; border-top: 1px solid #333; padding-top: 20px;">
                 ⚠️ Press ESC to exit fullscreen (only way to stop)<br>
-                <span style="color: #4CAF50;">⏯️ Pause on command | ← Go back | → Go forward | + Speed up | - Speed down | ↑ +100 quality | ↓ -100 quality</span>
+                Videos/Streams play with no controls - Live streams don't loop
             </p>
         </div>
     </div>
@@ -619,10 +601,6 @@
     <div class="loop-indicator hidden" id="loopIndicator">
         ↻ seamless loop
     </div>
-    
-    <div class="control-hint hidden" id="controlHint">
-        Space: Pause | ← → : Skip | +/- : Speed | ↑/↓ : Quality
-    </div>
 
     <script>
         // DOM Elements
@@ -642,7 +620,6 @@
         const resolution = document.getElementById('resolution');
         const loopIndicator = document.getElementById('loopIndicator');
         const errorMessage = document.getElementById('errorMessage');
-        const controlHint = document.getElementById('controlHint');
         
         // YouTube API variables
         let ytPlayer = null;
@@ -657,9 +634,6 @@
         let loopCheckInterval = null;
         let lastTime = 0;
         let streamKeepAliveInterval = null;
-        
-        // Quality tracking
-        let currentQuality = 'auto';
         
         // Load YouTube API
         function loadYouTubeAPI() {
@@ -683,7 +657,7 @@
             }
         };
         
-        // Initialize YouTube player with hidden controls
+        // Initialize YouTube player with minimal UI
         function initYouTubePlayer(videoId, isLive = false) {
             if (!isYouTubeReady) {
                 pendingYouTubeId = videoId;
@@ -699,7 +673,6 @@
             
             isLiveStream = isLive;
             
-            // Hide all YouTube UI elements
             const playerVars = {
                 'autoplay': 1,
                 'controls': 0,
@@ -713,14 +686,15 @@
                 'mute': 0,
                 'cc_load_policy': 0,
                 'color': 'white',
+                'hl': 'en',
                 'enablejsapi': 1,
-                'origin': window.location.origin,
-                'widget_referrer': window.location.href
+                'origin': window.location.origin
             };
             
             // For live streams, don't enable loop
             if (!isLive) {
                 playerVars.loop = 1;
+                playerVars.playlist = videoId; // Required for loop to work
             }
             
             ytPlayer = new YT.Player('youtubePlayer', {
@@ -732,19 +706,6 @@
                     'onError': onYouTubeError
                 }
             });
-            
-            // Additional CSS to hide YouTube elements
-            const style = document.createElement('style');
-            style.innerHTML = `
-                .ytp-title, .ytp-title-text, .ytp-title-link, .ytp-title-channel, 
-                .ytp-chrome-top, .ytp-gradient-top, .ytp-ce-element, .ytp-pause-overlay,
-                .ytp-endscreen-content, .ytp-share-panel, .ytp-overflow-panel,
-                .ytp-spinner, .ytp-watermark, .ytp-youtube-button, .ytp-chrome-bottom,
-                .ytp-progress-bar, .ytp-time-display, .ytp-volume-panel, .ytp-settings-button {
-                    display: none !important;
-                }
-            `;
-            document.head.appendChild(style);
         }
         
         // YouTube ready
@@ -768,6 +729,12 @@
                 loopIndicator.classList.remove('hidden');
             }
             
+            // Hide all YouTube UI elements by covering them
+            const iframe = youtubePlayer.querySelector('iframe');
+            if (iframe) {
+                iframe.style.pointerEvents = 'none';
+            }
+            
             // Force fullscreen
             enterFullscreen();
             
@@ -776,18 +743,9 @@
             sourceIndicator.classList.remove('hidden');
             exitNote.classList.remove('hidden');
             videoInfo.classList.add('hidden');
-            controlHint.classList.remove('hidden');
             
             // Hide overlay
             overlay.classList.add('hidden');
-            
-            // Apply CSS to hide YouTube UI elements
-            setTimeout(() => {
-                const iframe = youtubePlayer.querySelector('iframe');
-                if (iframe) {
-                    iframe.style.pointerEvents = 'none';
-                }
-            }, 1000);
         }
         
         // YouTube state change
@@ -805,6 +763,15 @@
             // For live streams, ensure it keeps playing
             if (isLiveStream && event.data === YT.PlayerState.PAUSED) {
                 event.target.playVideo();
+            }
+            
+            // If video is buffering, make sure it resumes
+            if (event.data === YT.PlayerState.BUFFERING) {
+                setTimeout(() => {
+                    if (ytPlayer && ytPlayer.getPlayerState() === YT.PlayerState.BUFFERING) {
+                        ytPlayer.playVideo();
+                    }
+                }, 1000);
             }
         }
         
@@ -861,6 +828,11 @@
                     ytPlayer.playVideo();
                 }
                 
+                // If unstarted, try to play
+                if (state === -1) {
+                    ytPlayer.playVideo();
+                }
+                
             }, 5000); // Check every 5 seconds
         }
         
@@ -909,7 +881,7 @@
             
             const channel = match[1];
             
-            // Use Twitch embed without controls
+            // Use Twitch embed with minimal UI
             youtubePlayer.style.display = 'block';
             videoPlayer.style.display = 'none';
             
@@ -919,7 +891,7 @@
                         allowfullscreen="false" 
                         scrolling="no"
                         allow="autoplay; fullscreen"
-                        style="width:100%; height:100%; pointer-events: none;">
+                        style="width:100%; height:100%; pointer-events:none;">
                 </iframe>
             `;
             
@@ -936,7 +908,6 @@
                 loadingIndicator.classList.remove('show');
                 overlay.classList.add('hidden');
                 exitNote.classList.remove('hidden');
-                controlHint.classList.remove('hidden');
             }, 1000);
             
             // Keep alive for Twitch
@@ -993,7 +964,6 @@
                         loadingIndicator.classList.remove('show');
                         overlay.classList.add('hidden');
                         exitNote.classList.remove('hidden');
-                        controlHint.classList.remove('hidden');
                         if (!isLive) {
                             videoInfo.classList.remove('hidden');
                             loopIndicator.classList.remove('hidden');
@@ -1102,121 +1072,29 @@
             });
         }
         
-        // Command handling for keyboard controls
+        // Block keyboard shortcuts
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                return true; // Allow ESC to exit
-            }
-            
-            // Only handle commands when in fullscreen
-            if (!document.fullscreenElement && !document.webkitFullscreenElement) {
                 return true;
             }
             
-            e.preventDefault();
-            e.stopPropagation();
-            
-            // Pause on spacebar
-            if (e.code === 'Space') {
-                if (ytPlayer) {
-                    const state = ytPlayer.getPlayerState();
-                    if (state === YT.PlayerState.PLAYING) {
-                        ytPlayer.pauseVideo();
-                    } else {
-                        ytPlayer.playVideo();
-                    }
-                } else if (videoPlayer.src) {
-                    if (videoPlayer.paused) {
-                        videoPlayer.play();
-                    } else {
-                        videoPlayer.pause();
-                    }
-                }
-                return false;
-            }
-            
-            // Go back 10 seconds
-            if (e.key === 'ArrowLeft') {
-                if (ytPlayer) {
-                    const currentTime = ytPlayer.getCurrentTime();
-                    ytPlayer.seekTo(Math.max(0, currentTime - 10), true);
-                } else if (videoPlayer.src) {
-                    videoPlayer.currentTime = Math.max(0, videoPlayer.currentTime - 10);
-                }
-                return false;
-            }
-            
-            // Go forward 10 seconds
-            if (e.key === 'ArrowRight') {
-                if (ytPlayer) {
-                    const currentTime = ytPlayer.getCurrentTime();
-                    const duration = ytPlayer.getDuration();
-                    ytPlayer.seekTo(Math.min(duration, currentTime + 10), true);
-                } else if (videoPlayer.src) {
-                    videoPlayer.currentTime = Math.min(videoPlayer.duration, videoPlayer.currentTime + 10);
-                }
-                return false;
-            }
-            
-            // Speed up
-            if (e.key === '=' || e.key === '+' || (e.key === 's' && !e.ctrlKey && !e.metaKey)) {
-                if (videoPlayer.src) {
-                    videoPlayer.playbackRate = Math.min(4, videoPlayer.playbackRate + 0.25);
-                }
-                return false;
-            }
-            
-            // Slow down
-            if (e.key === '-' || e.key === '_' || (e.key === 'w' && !e.ctrlKey && !e.metaKey)) {
-                if (videoPlayer.src) {
-                    videoPlayer.playbackRate = Math.max(0.25, videoPlayer.playbackRate - 0.25);
-                }
-                return false;
-            }
-            
-            // Quality up (+100 quality) - not directly applicable for most videos
-            if (e.key === 'ArrowUp') {
-                // For YouTube videos, try to increase quality
-                if (ytPlayer) {
-                    const availableQualities = ytPlayer.getAvailableQualityLevels();
-                    if (availableQualities && availableQualities.length > 0) {
-                        const currentIndex = availableQualities.indexOf(currentQuality);
-                        if (currentIndex < availableQualities.length - 1) {
-                            currentQuality = availableQualities[currentIndex + 1];
-                            ytPlayer.setPlaybackQuality(currentQuality);
-                        }
-                    }
-                }
-                return false;
-            }
-            
-            // Quality down (-100 quality)
-            if (e.key === 'ArrowDown') {
-                // For YouTube videos, try to decrease quality
-                if (ytPlayer) {
-                    const availableQualities = ytPlayer.getAvailableQualityLevels();
-                    if (availableQualities && availableQualities.length > 0) {
-                        const currentIndex = availableQualities.indexOf(currentQuality);
-                        if (currentIndex > 0) {
-                            currentQuality = availableQualities[currentIndex - 1];
-                            ytPlayer.setPlaybackQuality(currentQuality);
-                        }
-                    }
-                }
-                return false;
-            }
-            
-            // Block all other keys
             const blockedKeys = [
+                ' ', 'Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown',
                 'f', 'F', 'k', 'K', 'm', 'M', 'p', 'P', '[', ']', '<', '>',
                 'Home', 'End', 'PageUp', 'PageDown'
             ];
             
             if (blockedKeys.includes(e.key) || blockedKeys.includes(e.code)) {
+                e.preventDefault();
+                e.stopPropagation();
                 return false;
             }
             
-            return false;
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+                e.preventDefault();
+                e.stopPropagation();
+                return false;
+            }
         }, true);
         
         // Prevent right-click
@@ -1326,7 +1204,6 @@
                     videoInfo.classList.remove('hidden');
                     loopIndicator.classList.remove('hidden');
                     liveIndicator.classList.add('hidden');
-                    controlHint.classList.remove('hidden');
                     
                     enterFullscreen();
                     setupLocalVideoSeamlessLoop();
@@ -1371,7 +1248,6 @@
                 liveIndicator.classList.add('hidden');
                 videoInfo.classList.add('hidden');
                 loopIndicator.classList.add('hidden');
-                controlHint.classList.add('hidden');
                 
                 videoPlayer.pause();
                 videoPlayer.src = '';
@@ -1434,8 +1310,7 @@
         // Initialize
         loadYouTubeAPI();
         loadHLSjs();
-        console.log('Universal Video Player with Live Support and Commands ready');
-        console.log('Commands: Space (Pause), ← (Back 10s), → (Forward 10s), + (Speed up), - (Slow down), ↑ (+100 quality), ↓ (-100 quality)');
+        console.log('Universal Video Player with Live Support ready');
     </script>
 </body>
 </html>
